@@ -65,8 +65,17 @@ static int probe_addr(int fd, int addr) {
     struct i2c_smbus_ioctl_data args;
     union i2c_smbus_data data;
 
-    if (ioctl(fd, I2C_SLAVE, addr) < 0)
-        return -1;
+    /* Try I2C_SLAVE first; if the address is already claimed by a
+     * kernel driver (shows as UU in i2cdetect), fall back to
+     * I2C_SLAVE_FORCE so we can still probe it. */
+    if (ioctl(fd, I2C_SLAVE, addr) < 0) {
+        if (errno == EBUSY) {
+            if (ioctl(fd, I2C_SLAVE_FORCE, addr) < 0)
+                return -1;
+        } else {
+            return -1;
+        }
+    }
 
     memset(&data, 0, sizeof(data));
 
@@ -96,8 +105,14 @@ static int read_reg8(int fd, int addr, uint8_t reg, uint8_t *val) {
     struct i2c_smbus_ioctl_data args;
     union i2c_smbus_data data;
 
-    if (ioctl(fd, I2C_SLAVE, addr) < 0)
-        return -1;
+    if (ioctl(fd, I2C_SLAVE, addr) < 0) {
+        if (errno == EBUSY) {
+            if (ioctl(fd, I2C_SLAVE_FORCE, addr) < 0)
+                return -1;
+        } else {
+            return -1;
+        }
+    }
 
     memset(&data, 0, sizeof(data));
     data.byte = 0;
